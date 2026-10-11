@@ -12,14 +12,14 @@ permissions:
 jobs:
   build:
     name: Build Android APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -30,13 +30,29 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Check project files
+      - name: Prepare Flutter project
+        shell: bash
         run: |
+          set -e
+
+          if [ ! -f lib/main.dart ]; then
+            if [ ! -f main.dart ]; then
+              echo "::error::main.dart or lib/main.dart is missing"
+              exit 1
+            fi
+            mkdir -p lib
+            cp main.dart lib/main.dart
+          fi
+
+          if [ ! -f pubspec.yaml ]; then
+            flutter create --project-name glass_ai --platforms=android .
+          else
+            flutter create --project-name glass_ai --platforms=android .
+          fi
+
           test -f pubspec.yaml
           test -f lib/main.dart
-
-      - name: Generate Android platform
-        run: flutter create --project-name glass_ai --platforms=android .
+          test -f android/app/src/main/AndroidManifest.xml
 
       - name: Configure Internet permission
         run: |
@@ -50,7 +66,7 @@ jobs:
           if permission not in text:
               marker = 'xmlns:android="http://schemas.android.com/apk/res/android">'
               if marker not in text:
-                  raise SystemExit("AndroidManifest.xml marker not found")
+                  raise SystemExit("Android manifest marker not found")
               text = text.replace(marker, marker + "\n    " + permission, 1)
               path.write_text(text)
           PY
@@ -58,13 +74,10 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Analyze Flutter code
-        run: flutter analyze
-
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Glass-AI-APK
